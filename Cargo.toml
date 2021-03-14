@@ -1,0 +1,12 @@
+[package]
+name = "bass-sys"
+version = "0.1.0"
+authors = ["Gregory Mitrano <gregory.mitrano@gmail.com>"]
+edition = "2018"
+links = "bass"
+
+[features]
+gen-bindings = ["bindgen"]
+
+[build-dependencies]
+bindgen = { version = "0.57", optional = true }
