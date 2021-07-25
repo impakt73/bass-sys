@@ -2,14 +2,26 @@ use std::env;
 use std::fs;
 use std::path::PathBuf;
 
-#[cfg(target_os = "windows")]
-pub const LIB_FILE_NAME: &str = "bass.lib";
 pub const DLL_FILE_NAME: &str = "bass.dll";
 
-#[cfg(not(target_os = "windows"))]
-pub const LIB_FILE_NAME: &str = "libbass.so";
-
 pub const BINDINGS_FILE_NAME: &str = "bindings.rs";
+
+/// Get the filename for the prebuilt bindings for our target platform.
+fn prebuilt_lib_binary_filename() -> &'static str {
+    // Note: We can't use cfg(target_os) because this breaks when cross-compiling.
+    let target_os = env::var("CARGO_CFG_TARGET_OS");
+
+    match target_os.as_ref().map(|x| &**x) {
+        Ok("linux") => "bass.lib",
+        Ok("windows") => "libbass.so",
+        Ok("macos") => "libbass.dylib",
+        Ok(unsupported_os) => panic!(
+            "Unsupported target os: \"{}\". Not sure what to link against, so we'll do nothing.",
+            unsupported_os
+        ),
+        Err(err) => panic!("Error reading target os for build: {}", err),
+    }
+}
 
 /// Get the filename for the prebuilt bindings for our target platform.
 #[cfg(not(feature = "gen-bindings"))]
@@ -59,7 +71,10 @@ fn process_bindings(lib_path: &PathBuf, out_path: &PathBuf) {
         BINDINGS_FILE_NAME
     );
     fs::copy(
-        lib_path.join(prebuilt_bindings_filename()).to_str().unwrap(),
+        lib_path
+            .join(prebuilt_bindings_filename())
+            .to_str()
+            .unwrap(),
         out_path.join(BINDINGS_FILE_NAME).to_str().unwrap(),
     )
     .expect("Failed to copy prebuilt bindings to output directory");
@@ -70,11 +85,16 @@ fn main() {
     let out_path = PathBuf::from(env::var("OUT_DIR").unwrap());
 
     // Copy the library into the output folder and instruct cargo to link against it
+    let lib_filename = prebuilt_lib_binary_filename();
     fs::copy(
-        lib_path.join(LIB_FILE_NAME).to_str().unwrap(),
-        out_path.join(LIB_FILE_NAME).to_str().unwrap(),
+        lib_path.join(lib_filename).to_str().unwrap(),
+        out_path.join(lib_filename).to_str().unwrap(),
     )
-    .expect("Failed to copy native lib to output directory");
+    .unwrap_or_else(|err| panic!(
+        "Failed to copy native lib (\"{}\") to output directory: {}",
+        lib_filename,
+        err
+    ));
 
     println!("cargo:rustc-link-lib=bass");
     println!(
@@ -83,12 +103,16 @@ fn main() {
     );
 
     // On Windows, we also need to copy a DLL to the output folder
-    if cfg!(target_os = "windows") {
+    if env::var("CARGO_CFG_TARGET_OS") == Ok("windows".to_string()) {
         fs::copy(
             lib_path.join(DLL_FILE_NAME).to_str().unwrap(),
             out_path.join(DLL_FILE_NAME).to_str().unwrap(),
         )
-        .expect("Failed to copy native dll to output directory");
+        .unwrap_or_else(|err| panic!(
+            "Failed to copy native DLL (\"{}\") to output directory: {}",
+            DLL_FILE_NAME,
+            err
+        ));
     }
 
     // Generate the Rust bindings
