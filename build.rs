@@ -9,17 +9,30 @@ pub const DLL_FILE_NAME: &str = "bass.dll";
 #[cfg(not(target_os = "windows"))]
 pub const LIB_FILE_NAME: &str = "libbass.so";
 
-#[cfg(target_os = "windows")]
-pub const PREBUILT_BINDINGS_FILE_NAME: &str = "bindings_win.rs";
-
-#[cfg(not(target_os = "windows"))]
-pub const PREBUILT_BINDINGS_FILE_NAME: &str = "bindings_lnx.rs";
-
 pub const BINDINGS_FILE_NAME: &str = "bindings.rs";
+
+/// Get the filename for the prebuilt bindings for our target platform.
+#[cfg(not(feature = "gen-bindings"))]
+fn prebuilt_bindings_filename() -> &'static str {
+    // Note: We can't use cfg(target_os) because this breaks when cross-compiling.
+    let target_os = env::var("CARGO_CFG_TARGET_OS");
+
+    match target_os.as_ref().map(|x| &**x) {
+        Ok("linux") => "bindings_lnx.rs",
+        Ok("windows") => "bindings_win.rs",
+        Ok(unsupported_os) => panic!(
+            "Unsupported target os for prebuilt bindings: \"{}\". Use the bindgen feature instead",
+            unsupported_os
+        ),
+        Err(err) => panic!("Error reading target os for build: {}", err),
+    }
+}
 
 // If binding generation is enabled, run bindgen to generate fresh bindings
 #[cfg(feature = "gen-bindings")]
 fn process_bindings(_lib_path: &PathBuf, out_path: &PathBuf) {
+    println!("Running bindgen!");
+
     println!("cargo:rerun-if-changed=lib/bass.h");
     let bindings = bindgen::Builder::default()
         .header("lib/bass.h")
@@ -40,8 +53,13 @@ fn process_bindings(_lib_path: &PathBuf, out_path: &PathBuf) {
 // If binding generation is not enabled, copy the prebuilt bindings from the lib folder
 #[cfg(not(feature = "gen-bindings"))]
 fn process_bindings(lib_path: &PathBuf, out_path: &PathBuf) {
+    println!(
+        "Using prebuilts: {} -> {}!",
+        prebuilt_bindings_filename(),
+        BINDINGS_FILE_NAME
+    );
     fs::copy(
-        lib_path.join(PREBUILT_BINDINGS_FILE_NAME).to_str().unwrap(),
+        lib_path.join(prebuilt_bindings_filename()).to_str().unwrap(),
         out_path.join(BINDINGS_FILE_NAME).to_str().unwrap(),
     )
     .expect("Failed to copy prebuilt bindings to output directory");
