@@ -1,6 +1,5 @@
 use std::env;
 use std::fs;
-use std::path::PathBuf;
 
 pub const DLL_FILE_NAME: &str = "bass.dll";
 
@@ -42,7 +41,7 @@ fn prebuilt_bindings_filename() -> &'static str {
 
 // If binding generation is enabled, run bindgen to generate fresh bindings
 #[cfg(feature = "gen-bindings")]
-fn process_bindings(_lib_path: &PathBuf, out_path: &PathBuf) {
+fn process_bindings(_lib_path: &str, out_path: &str) {
     println!("Running bindgen!");
 
     println!("cargo:rerun-if-changed=lib/bass.h");
@@ -58,63 +57,59 @@ fn process_bindings(_lib_path: &PathBuf, out_path: &PathBuf) {
         .expect("Unable to generate bindings");
 
     bindings
-        .write_to_file(out_path.join(BINDINGS_FILE_NAME))
+        .write_to_file(&format!("{}/{}", out_path, BINDINGS_FILE_NAME))
         .expect("Couldn't write bindings!");
 }
 
 // If binding generation is not enabled, copy the prebuilt bindings from the lib folder
 #[cfg(not(feature = "gen-bindings"))]
-fn process_bindings(lib_path: &PathBuf, out_path: &PathBuf) {
+fn process_bindings(lib_path: &str, out_path: &str) {
     println!(
         "Using prebuilts: {} -> {}!",
         prebuilt_bindings_filename(),
         BINDINGS_FILE_NAME
     );
     fs::copy(
-        lib_path
-            .join(prebuilt_bindings_filename())
-            .to_str()
-            .unwrap(),
-        out_path.join(BINDINGS_FILE_NAME).to_str().unwrap(),
+        &format!("{}/{}", lib_path, prebuilt_bindings_filename()),
+        &format!("{}/{}", out_path, BINDINGS_FILE_NAME),
     )
     .expect("Failed to copy prebuilt bindings to output directory");
 }
 
 fn main() {
-    let lib_path = PathBuf::from("lib");
-    let out_path = PathBuf::from(env::var("OUT_DIR").unwrap());
+    let lib_path = "lib";
+    let out_path = env::var("OUT_DIR").unwrap();
 
     // Copy the library into the output folder and instruct cargo to link against it
     let lib_filename = prebuilt_lib_binary_filename();
     fs::copy(
-        lib_path.join(lib_filename).to_str().unwrap(),
-        out_path.join(lib_filename).to_str().unwrap(),
+        &format!("{}/{}", lib_path, lib_filename),
+        &format!("{}/{}", out_path, lib_filename),
     )
-    .unwrap_or_else(|err| panic!(
-        "Failed to copy native lib (\"{}\") to output directory: {}",
-        lib_filename,
-        err
-    ));
+    .unwrap_or_else(|err| {
+        panic!(
+            "Failed to copy native lib (\"{}\") to output directory: {}",
+            lib_filename, err
+        )
+    });
 
     println!("cargo:rustc-link-lib=bass");
-    println!(
-        "cargo:rustc-link-search=native={}",
-        out_path.to_str().unwrap()
-    );
+    println!("cargo:rustc-link-search=native={}", out_path);
 
     // On Windows, we also need to copy a DLL to the output folder
     if env::var("CARGO_CFG_TARGET_OS") == Ok("windows".to_string()) {
         fs::copy(
-            lib_path.join(DLL_FILE_NAME).to_str().unwrap(),
-            out_path.join(DLL_FILE_NAME).to_str().unwrap(),
+            &format!("{}/{}", lib_path, DLL_FILE_NAME),
+            &format!("{}/{}", out_path, DLL_FILE_NAME),
         )
-        .unwrap_or_else(|err| panic!(
-            "Failed to copy native DLL (\"{}\") to output directory: {}",
-            DLL_FILE_NAME,
-            err
-        ));
+        .unwrap_or_else(|err| {
+            panic!(
+                "Failed to copy native DLL (\"{}\") to output directory: {}",
+                DLL_FILE_NAME, err
+            )
+        });
     }
 
     // Generate the Rust bindings
-    process_bindings(&lib_path, &out_path);
+    process_bindings(lib_path, &out_path);
 }
