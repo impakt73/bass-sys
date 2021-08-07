@@ -11,11 +11,11 @@ fn prebuilt_lib_binary_filename() -> &'static str {
     let target_os = env::var("CARGO_CFG_TARGET_OS");
 
     match target_os.as_ref().map(|x| &**x) {
-        Ok("linux") => "bass.lib",
-        Ok("windows") => "libbass.so",
+        Ok("windows") => "bass.lib",
+        Ok("linux") => "libbass.so",
         Ok("macos") => "libbass.dylib",
         Ok(unsupported_os) => panic!(
-            "Unsupported target os: \"{}\". Not sure what to link against, so we'll do nothing.",
+            "Unsupported target os: \"{}\". Not sure what to link against.",
             unsupported_os
         ),
         Err(err) => panic!("Error reading target os for build: {}", err),
@@ -31,8 +31,11 @@ fn prebuilt_bindings_filename() -> &'static str {
     match target_os.as_ref().map(|x| &**x) {
         Ok("linux") => "bindings_lnx.rs",
         Ok("windows") => "bindings_win.rs",
+        // Note: The bindings generated for both aarch64 and x86_64 are identical, so we include just the single set.
+        // The unit tests that bindgen produces should tell us if this changes.
+        Ok("macos") => "bindings_macos.rs",
         Ok(unsupported_os) => panic!(
-            "Unsupported target os for prebuilt bindings: \"{}\". Use the bindgen feature instead",
+            "Unsupported target os for prebuilt bindings: \"{}\". Use the \"gen-bindings\" feature instead",
             unsupported_os
         ),
         Err(err) => panic!("Error reading target os for build: {}", err),
